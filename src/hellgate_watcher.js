@@ -87,7 +87,7 @@ export class BattleReportImageGenerator {
     return battleReports;
   }
 
-  static async generateEquipmentImage(equipment) {
+  static async generateEquipmentImage(equipment, isVictim = false) {
     const itemImages = {};
 
     for (const item of equipment.items) {
@@ -107,11 +107,69 @@ export class BattleReportImageGenerator {
       if (!imagePath || !LAYOUT[itemSlot]) continue;
 
       try {
-        const itemImage = await loadImage(imagePath);
+        let itemImage = await loadImage(imagePath);
         const coords = [
           LAYOUT[itemSlot][0] * IMAGE_SIZE,
           LAYOUT[itemSlot][1] * IMAGE_SIZE,
         ];
+        
+        // If victim, apply grayscale only to the item icon (not the background/border)
+        if (isVictim) {
+          // Create a temporary canvas for the item image
+          const itemCanvas = createCanvas(IMAGE_SIZE, IMAGE_SIZE);
+          const itemCtx = itemCanvas.getContext('2d');
+          
+          // Draw the original item image
+          itemCtx.drawImage(itemImage, 0, 0, IMAGE_SIZE, IMAGE_SIZE);
+          
+          // Get image data
+          const imageData = itemCtx.getImageData(0, 0, IMAGE_SIZE, IMAGE_SIZE);
+          const data = imageData.data;
+          
+          // Apply grayscale with better algorithm
+          // Try to preserve border colors by detecting edges and saturated colors
+          for (let i = 0; i < data.length; i += 4) {
+            const alpha = data[i + 3];
+            // Only apply grayscale to visible pixels
+            if (alpha > 0) {
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+              
+              // Calculate saturation to detect borders (borders are usually highly saturated)
+              const max = Math.max(r, g, b);
+              const min = Math.min(r, g, b);
+              const saturation = max === 0 ? 0 : (max - min) / max;
+              
+              // Calculate brightness
+              const brightness = (r + g + b) / 3;
+              
+              // If pixel is highly saturated (likely a border) or very bright/dark (border edge),
+              // reduce grayscale effect to preserve some color
+              const isLikelyBorder = saturation > 0.5 || brightness < 30 || brightness > 220;
+              
+              if (isLikelyBorder) {
+                // For borders, apply lighter grayscale (blend with original color)
+                const gray = r * 0.299 + g * 0.587 + b * 0.114;
+                const blendFactor = 0.6; // 60% grayscale, 40% original color
+                data[i] = gray * DEAD_PLAYER_GRAYSCALE_ENHANCEMENT * blendFactor + r * (1 - blendFactor);
+                data[i + 1] = gray * DEAD_PLAYER_GRAYSCALE_ENHANCEMENT * blendFactor + g * (1 - blendFactor);
+                data[i + 2] = gray * DEAD_PLAYER_GRAYSCALE_ENHANCEMENT * blendFactor + b * (1 - blendFactor);
+              } else {
+                // For item icon (less saturated, middle brightness), apply full grayscale
+                const gray = r * 0.299 + g * 0.587 + b * 0.114;
+                data[i] = gray * DEAD_PLAYER_GRAYSCALE_ENHANCEMENT;
+                data[i + 1] = gray * DEAD_PLAYER_GRAYSCALE_ENHANCEMENT;
+                data[i + 2] = gray * DEAD_PLAYER_GRAYSCALE_ENHANCEMENT;
+              }
+              // Keep alpha channel unchanged
+            }
+          }
+          
+          itemCtx.putImageData(imageData, 0, 0);
+          itemImage = itemCanvas;
+        }
+        
         // Ensure image is drawn with full color (not grayscale)
         ctx.globalCompositeOperation = 'source-over';
         ctx.imageSmoothingEnabled = true;
@@ -275,54 +333,25 @@ export class BattleReportImageGenerator {
           yPos + PLAYER_NAME_FONT_SIZE
         );
 
-        // Paste equipment image
-        const equipmentImagePath = await BattleReportImageGenerator.generateEquipmentImage(
-          player.equipment
-        );
-        let equipmentImage = await loadImage(equipmentImagePath);
-        
-        // Ensure we're working with a color image (not grayscale)
-        // Check if image might already be grayscale by sampling a few pixels
-        if (VERBOSE_LOGGING && equipmentImage.width > 0 && equipmentImage.height > 0) {
-          const testCanvas = createCanvas(1, 1);
-          const testCtx = testCanvas.getContext('2d');
-          testCtx.drawImage(equipmentImage, 0, 0, 1, 1);
-          const testData = testCtx.getImageData(0, 0, 1, 1).data;
-          const isGrayscale = Math.abs(testData[0] - testData[1]) < 5 && Math.abs(testData[1] - testData[2]) < 5;
-          if (isGrayscale) {
-            console.log(`[${getCurrentTimeFormatted()}]\t⚠️  Warning: Equipment image for ${player.name} appears to be grayscale already`);
-          }
-        }
-
-        // Make dead players gray
+        // Check if player is victim before generating equipment image
         const isVictim = battle.victimIds.includes(playerId);
         if (VERBOSE_LOGGING) {
           console.log(`[${getCurrentTimeFormatted()}]\tPlayer ${player.name} (${playerId}): isVictim=${isVictim}, victimIds=[${battle.victimIds.join(', ')}]`);
         }
         
-        if (isVictim) {
-          if (VERBOSE_LOGGING) {
-            console.log(`[${getCurrentTimeFormatted()}]\tApplying grayscale to dead player: ${player.name}`);
-          }
-          const tempCanvas = createCanvas(equipmentImage.width, equipmentImage.height);
-          const tempCtx = tempCanvas.getContext('2d');
-          tempCtx.drawImage(equipmentImage, 0, 0);
-          
-          const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-          const data = imageData.data;
-          
-          for (let i = 0; i < data.length; i += 4) {
-            const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-            data[i] = gray * DEAD_PLAYER_GRAYSCALE_ENHANCEMENT;
-            data[i + 1] = gray * DEAD_PLAYER_GRAYSCALE_ENHANCEMENT;
-            data[i + 2] = gray * DEAD_PLAYER_GRAYSCALE_ENHANCEMENT;
-          }
-          
-          tempCtx.putImageData(imageData, 0, 0);
-          equipmentImage = tempCanvas;
-        } else {
-          if (VERBOSE_LOGGING) {
-            console.log(`[${getCurrentTimeFormatted()}]\tKeeping color for alive player: ${player.name}`);
+        // Generate equipment image with grayscale items if victim
+        // This way, only item icons are grayscale, background/borders stay colored
+        const equipmentImagePath = await BattleReportImageGenerator.generateEquipmentImage(
+          player.equipment,
+          isVictim
+        );
+        const equipmentImage = await loadImage(equipmentImagePath);
+        
+        if (VERBOSE_LOGGING) {
+          if (isVictim) {
+            console.log(`[${getCurrentTimeFormatted()}]\tGenerated equipment image with grayscale items for victim: ${player.name}`);
+          } else {
+            console.log(`[${getCurrentTimeFormatted()}]\tGenerated equipment image with full color for alive player: ${player.name}`);
           }
         }
 

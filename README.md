@@ -29,20 +29,6 @@ This command requires administrator permissions.
 
 **For Windows users:** The `canvas` package requires native compilation. You need to install build tools:
 
-#### Option 1: Install Visual Studio Build Tools (Recommended)
-1. Download and install [Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)
-2. During installation, select "Desktop development with C++" workload
-3. Restart your terminal/command prompt
-
-#### Option 2: Install Python and configure npm
-1. Install Python 3.x from [python.org](https://www.python.org/downloads/)
-   - **Important:** Check "Add Python to PATH" during installation
-2. Install windows-build-tools (run as Administrator):
-   ```bash
-   npm install --global windows-build-tools
-   ```
-3. Restart your terminal/command prompt
-
 ### 1. Clone the repository
 
 ```bash
@@ -56,28 +42,6 @@ cd hellgate-watcher
 npm install
 ```
 
-**If you encounter permission errors (EPERM) on Windows:**
-1. Close all programs that might be using node_modules (VS Code, terminals, etc.)
-2. Run the fix script:
-   ```bash
-   # PowerShell (recommended)
-   .\fix-install.ps1
-   
-   # Or Command Prompt
-   fix-install.bat
-   ```
-3. Or manually:
-   ```bash
-   # Close Node processes
-   taskkill /F /IM node.exe
-   
-   # Remove node_modules
-   rmdir /s /q node_modules
-   
-   # Clear cache and reinstall
-   npm cache clean --force
-   npm install
-   ```
 
 **If canvas installation fails on Windows:**
 - Make sure you've installed the build tools (see above)
