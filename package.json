@@ -1,0 +1,33 @@
+{
+  "name": "hellgate-watcher",
+  "version": "0.1.0",
+  "description": "Discord bot that monitors and reports recent 2v2 and 5v5 Hellgate battles from Albion Online servers",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "install:canvas": "npm install canvas --build-from-source"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "albion-online",
+    "hellgate"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "@napi-rs/canvas": "^0.1.56",
+    "sharp": "^0.33.2",
+    "dotenv": "^16.4.1",
+    "axios": "^1.6.5",
+    "jimp": "^1.6.0",
+    "date-fns": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
