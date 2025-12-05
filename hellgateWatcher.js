@@ -117,7 +117,15 @@ async function fileExists(p) {
 // IMAGE & HTTP UTIL
 async function fetchImageBuffer(url) {
   try {
-    const resp = await axios.get(url, { responseType: "arraybuffer", timeout: TIMEOUT });
+    const resp = await axios.get(url, {
+      responseType: "arraybuffer",
+      timeout: TIMEOUT,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        'Referer': 'https://albiononline.com/',
+      },
+    });
     return Buffer.from(resp.data);
   } catch (e) {
     console.error(`[${getCurrentTimeFormatted()}]\tAn error occurred while fetching ${url}: ${e.message}`);
@@ -127,7 +135,15 @@ async function fetchImageBuffer(url) {
 
 async function fetchJson(url) {
   try {
-    const resp = await axios.get(url, { timeout: TIMEOUT });
+    const resp = await axios.get(url, {
+      timeout: TIMEOUT,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://albiononline.com/',
+        'Origin': 'https://albiononline.com',
+      },
+    });
     return resp.data;
   } catch (e) {
     console.error(`[${getCurrentTimeFormatted()}]\tAn error occurred while fetching ${url}: ${e.message}`);

@@ -14,7 +14,7 @@ export const SERVER_URLS = {
 // --------------------------------------------------------------------------------------------------
 // TIMING AND RATE LIMITS
 // --------------------------------------------------------------------------------------------------
-export const RATE_LIMIT_DELAY_SECONDS = 0.5;
+export const RATE_LIMIT_DELAY_SECONDS = 1.0; // Increased to avoid rate limiting
 export const TIMEOUT = 30000; // milliseconds
 export const BATTLE_CHECK_INTERVAL_MINUTES = 1;
 export const BATTLES_MAX_AGE_MINUTES = 2;

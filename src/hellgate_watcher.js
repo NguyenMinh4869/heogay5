@@ -16,6 +16,7 @@ import {
   REPORTED_BATTLES_JSON_PATH,
   SERVER_URLS,
   TIMEOUT,
+  RATE_LIMIT_DELAY_SECONDS,
   PLAYER_NAME_FONT_SIZE,
   TIMESTAMP_FONT_SIZE,
   FONT_COLOR,
@@ -236,6 +237,11 @@ export class BattleReportImageGenerator {
         responseType: 'arraybuffer',
         timeout: TIMEOUT,
         validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+          'Referer': 'https://albiononline.com/',
+        },
       });
       
       if (response.status !== 200) {
@@ -279,6 +285,12 @@ export class BattleReportImageGenerator {
     try {
       const response = await axios.get(url, {
         timeout: TIMEOUT,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+          'Referer': 'https://albiononline.com/',
+          'Origin': 'https://albiononline.com',
+        },
       });
       return response.data;
     } catch (error) {
@@ -462,19 +474,41 @@ export class BattleReportImageGenerator {
 }
 
 export class HellgateWatcher {
-  static async getJson(url) {
-    try {
-      const response = await axios.get(url, {
-        timeout: TIMEOUT,
-      });
-      return response.data;
-    } catch (error) {
-      console.error(
-        `[${getCurrentTimeFormatted()}]An error occurred while fetching ${url}:`,
-        error.message
-      );
-      return null;
+  static async getJson(url, retries = 3) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const response = await axios.get(url, {
+          timeout: TIMEOUT,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Referer': 'https://albiononline.com/',
+            'Origin': 'https://albiononline.com',
+          },
+        });
+        return response.data;
+      } catch (error) {
+        const is403 = error.response?.status === 403;
+        const isLastAttempt = attempt === retries - 1;
+        
+        if (is403 && !isLastAttempt) {
+          // Exponential backoff for 403 errors: 1s, 2s, 4s
+          const delayMs = Math.pow(2, attempt) * 1000;
+          console.error(
+            `[${getCurrentTimeFormatted()}]\t403 error on attempt ${attempt + 1}/${retries}, retrying in ${delayMs/1000}s...`
+          );
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        }
+        
+        console.error(
+          `[${getCurrentTimeFormatted()}]An error occurred while fetching ${url}:`,
+          error.message
+        );
+        return null;
+      }
     }
+    return null;
   }
 
   static async _get50Battles(serverUrl, limit = BATTLES_LIMIT, page = 1) {
@@ -522,8 +556,20 @@ export class HellgateWatcher {
 
       while (!HellgateWatcher._containsBattlesOutOfRange(battlesDicts)) {
         const newBattles = await HellgateWatcher._get50Battles(serverUrl, BATTLES_LIMIT, pageNumber);
+        
+        // If we got no battles (likely due to 403 or end of data), break to avoid infinite loop
+        if (!newBattles || newBattles.length === 0) {
+          if (VERBOSE_LOGGING) {
+            console.log(`[${getCurrentTimeFormatted()}]\tNo more battles returned for ${server}, stopping pagination`);
+          }
+          break;
+        }
+        
         battlesDicts.push(...newBattles);
         pageNumber += 1;
+        
+        // Add delay between requests to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY_SECONDS * 1000));
       }
 
       // Remove duplicate battles by ID (in case pagination returns same battles)
@@ -571,6 +617,9 @@ export class HellgateWatcher {
               battleDict.id,
               serverUrl
             );
+            
+            // Add small delay after each battle events request to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY_SECONDS * 500)); // Half delay for events
             
             if (!battleEvents || battleEvents.length === 0) {
               if (VERBOSE_LOGGING) {
